@@ -96,9 +96,23 @@ jobs:
             if(pr.head.sha!==process.env.CHECKED_HEAD) throw new Error('PR changed; await its new checks');
             if(pr.draft) { core.info('Draft: waiting for ready_for_review'); return; }
             const q=await github.graphql(`query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){autoMergeAllowed pullRequest(number:$number){id baseRef{branchProtectionRule{requiresStatusChecks requiresStrictStatusChecks requiredStatusCheckContexts}}}}}`,{...context.repo,number:pr.number});
-            const r=q.repository, rule=r.pullRequest.baseRef?.branchProtectionRule;
-            // Refuse to bypass missing branch protection. GitHub waits for every required check.
-            if(!r.autoMergeAllowed || !rule?.requiresStatusChecks || !rule.requiresStrictStatusChecks || !rule.requiredStatusCheckContexts.includes('market/catalog')) throw new Error('Configure auto-merge and strict branch protection requiring market/catalog first');
+            const r=q.repository;
+            const {autoMergeSetup}=await import(process.cwd()+'/scripts/auto-merge.mjs');
+            const setup=autoMergeSetup(r,r.pullRequest);
+            if(!setup.ready) {
+              // A submission can pass every check while the repository cannot
+              // auto-merge. Keep the run green and the PR open for manual merge;
+              // a maintainer must configure these settings once. Never bypass
+              // branch protection from this workflow.
+              core.warning('Auto-merge is not available until the repository is configured: '+setup.missing.join('; '));
+              await core.summary
+                .addHeading('Auto-merge is not configured',3)
+                .addRaw('The submission passed `market/catalog`, but the repository cannot merge it automatically. Configure these settings:\n')
+                .addList(setup.missing)
+                .addRaw('\nThe pull request stays open for manual merge. This workflow does not bypass branch protection.\n')
+                .write();
+              return;
+            }
             // Several independently checked upgrade PRs may race to merge. A strict
             // branch rule requires updating the remaining branches, then rechecking
             // their NEW head; never reuse the status from before the update.

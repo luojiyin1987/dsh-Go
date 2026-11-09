@@ -91,3 +91,11 @@ sha512-OCm2F4PwrCaNptn2TLTiZvlcK2RY7vmSNW8Qa3uu8YlUzt49pMSS9VdHQ3sKUUB9VEvST3+bj
 | 上述两组真实响应 | 实际 Worker `validateCatalog` 与官方 `parseMarketIndex` | 均通过；索引与 sidecar 名称、版本配对，媒体 SHA-512 与 npm 精确版本元数据一致；adapted、minApp、features、风险标记均符合扫描结果 |
 
 Worker 首次请求命中尚未过期的旧 4 条缓存，响应剩余有效期为 28 秒；等待自然过期后完成上述验收，没有清空 KV 或重部署 Worker。最终目录不包含原包名、暂存的 0.2.0 或占位版本。以上验证市场的真实公开分发，仍不扩展为 App 设备安装或付费供应商生成的验证。
+
+## 2026-11-09 自动合并缺少仓库设置时的行为
+
+Issue #797：`ccch1mneyyy/dsh-go-market` 的 main 当前没有分支保护，`check.yml` 的 auto-merge 步骤会抛错，排队中的提交停在 open。工作流现在先检查仓库设置；缺少 Allow auto-merge、严格分支保护或 `market/catalog` 必需检查时，用 `core.warning` 和 job summary 列出缺失项并跳过自动合并，PR 保持 open。它不会把工作流标红，也不会绕过分支保护。
+
+本地验证：`npm test` 28/28 通过。新增 `market/test/auto-merge.test.mjs` 覆盖已配置、单项缺失、规则缺失和工作流接线。`market/.github/workflows/check.yml` 通过 YAML 解析。`market/node_modules` 由本地 `npm ci` 生成，已被 `market/.gitignore` 忽略。
+
+未验证：真实仓库设置和 GitHub Actions 运行。维护者仍须在 `ccch1mneyyy/dsh-go-market` 启用 Allow auto-merge，并为 main 配置严格分支保护、要求 `market/catalog`。此前「2026-10-31 线上目录部署」记录的设置与 #797 的现象不一致，以仓库当前状态为准。
